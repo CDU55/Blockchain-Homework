@@ -1,0 +1,84 @@
+// SPDX-License-Identifier: MIT
+
+pragma solidity >=0.7.0 <=0.7.3;
+
+contract CrowdFunding  {
+
+
+    mapping(address =>uint) contributors;
+    address owner;
+    address payable private  distrubuteFundingContract;
+    uint fundingGoal;
+    bool private goalReached;
+    
+    constructor(uint goal, address payable distrubuteFunds)
+    {
+        owner=msg.sender;
+        fundingGoal=goal;
+        distrubuteFundingContract=distrubuteFunds;
+        goalReached=false;
+    }
+    
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only the owner of the contract can access this");
+        _;
+    }
+    
+    event newContribution(
+        address from,
+        uint contribution
+        );
+    
+    event refundRequested(
+        address requestedBy,
+        uint refundAmmount
+        );
+        
+    event fundingGoalReached();
+    event fundingRedirrected();
+    function contribute() external payable
+    {
+        require(msg.value!=0,'Please send a non-zero value if you want to contribute');
+        require(!goalReached,'Goal already reached,cannot contribute anymore');
+        uint balance=address(this).balance;
+        require(balance <= fundingGoal,'The paid sum is too big, the total funding would go beyond goal funding');
+        contributors[msg.sender]+=msg.value;
+        emit newContribution(msg.sender,msg.value);
+        if(balance == fundingGoal)
+        {
+            goalReached=true;
+            emit fundingGoalReached();
+        }
+    }
+    
+    function refund() external
+    {
+        require(contributors[msg.sender]!=0,'You are not on the contributors list');
+        require(!goalReached,'Goal reached,cannot refund');
+        msg.sender.transfer(contributors[msg.sender]);
+        emit refundRequested(msg.sender,contributors[msg.sender]);
+        contributors[msg.sender]=0;
+    }
+    
+    function redirectToFundingContract() external onlyOwner()
+    {
+        require(goalReached,'The goal has not been reached yet, cannot transfer to the distributor');
+        require(address(this).balance==fundingGoal,'The balance of the contract mult be equal to fundingGoal');
+        distrubuteFundingContract.transfer(fundingGoal);
+        emit fundingRedirrected();
+    }
+    
+    function isgoalReached() external view  returns(string memory)
+    {
+        if(goalReached)
+        {
+            return 'The goal has been reached';
+        }
+        else
+        {
+            return 'The goal has not been reached yet';
+        }
+    }
+    
+
+}

@@ -1,0 +1,128 @@
+// SPDX-License-Identifier: MIT
+
+pragma solidity >=0.7.0 <=0.7.3;
+contract DistributeFunding  {
+    
+    address private owner;
+    uint private totalShares;
+    uint private benefactorsNumber;
+    mapping(uint=>benefactor) shareHolders;
+
+    constructor()
+    {
+        owner=msg.sender;
+        totalShares=0;
+        benefactorsNumber=0;
+    }
+    
+    struct benefactor {
+        address payable benefactorAddress;
+        uint share;
+    }
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only the owner of the contract can access this");
+        _;
+    }
+    
+    event distributedToBenefactors();
+    
+    event benefactorAdded(
+        address newBenefactor,
+        uint share
+        );
+        
+    event benefactorModified(
+        address editedBenefactor,
+        uint newShare
+        );
+        
+    event benefactorDeleted(
+        address removedBenefactor
+        );
+        
+    function addShareHolder(address payable shareHolder,uint share) external onlyOwner()
+    {
+        require(share>0,'The share must be a positive number');
+        require(totalShares<100,'All shares are taken');
+        require(totalShares+share<=100,'Invalid share percentage');
+        bool found;
+        uint shareHolderIndex;
+        (found,shareHolderIndex)=getShareHolderIndex(shareHolder);
+        if(found)
+        {
+            revert('Share holder already exists');
+        }
+        shareHolders[benefactorsNumber]=benefactor(shareHolder,share);
+        totalShares+=share;
+        benefactorsNumber+=1;
+        emit benefactorAdded(shareHolder,share);
+    }
+    
+    function editShareHolder (address payable shareHolder,uint newShare) external onlyOwner()
+    {
+        require(totalShares>0,'There are no share holders');
+        bool found;
+        uint shareHolderIndex;
+        (found,shareHolderIndex)=getShareHolderIndex(shareHolder);
+        if(!found)
+        {
+            revert('The provided address does not belong to a share holder');
+        }
+        uint currentShare=shareHolders[shareHolderIndex].share;
+        require(totalShares-currentShare+newShare<=100,'Cannot update share,value is too large');
+        totalShares=totalShares-currentShare+newShare;
+        shareHolders[shareHolderIndex].share=newShare;
+        emit benefactorModified(shareHolders[shareHolderIndex].benefactorAddress,shareHolders[shareHolderIndex].share);
+    }
+    
+    function removeShareHolder (address payable shareHolder) external onlyOwner()
+    {
+        require(totalShares>0,'There are no share holders');
+        bool found;
+        uint shareHolderIndex;
+        (found,shareHolderIndex)=getShareHolderIndex(shareHolder);
+        if(!found)
+        {
+            revert('The provided address does not belong to a share holder');
+        }
+        emit benefactorDeleted(shareHolders[shareHolderIndex].benefactorAddress);
+        totalShares=totalShares-shareHolders[shareHolderIndex].share;
+        for(uint index=shareHolderIndex;index<benefactorsNumber-1;index++)
+        {
+            shareHolders[index]=shareHolders[index+1];
+        }
+        delete shareHolders[benefactorsNumber-1];
+        benefactorsNumber-=1;
+        
+    }
+    
+    function getShareHolderIndex(address shareHolder) private view returns(bool,uint)
+    {
+         for(uint index=0;index<benefactorsNumber;index++)
+        {
+            if(shareHolders[index].benefactorAddress==shareHolder)
+            {
+                return (true,index);
+            }
+        }
+        return (false,0);
+    }
+    function distribute() external onlyOwner(){
+        
+        require(totalShares==100,'Benefactors share do not sum 100%, please add new benefactors or edit the existing ones');
+        uint initialBalance=address(this).balance;
+        uint transferSum;
+        for(uint index=0;index<benefactorsNumber;index++)
+        {
+            transferSum=initialBalance/100*shareHolders[index].share;
+            shareHolders[index].benefactorAddress.transfer(transferSum);
+        }
+        emit distributedToBenefactors();
+    }
+    
+   receive() external payable
+    {
+        
+    }
+}
